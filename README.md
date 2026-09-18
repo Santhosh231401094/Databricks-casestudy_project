@@ -52,7 +52,8 @@ Architecture.
 
 The Gold layer follows a star-schema design.
 
-![RetailNova Star Schema](architecture/retailnova-star-schema.png)
+<img width="2302" height="2120" alt="star-schema" src="https://github.com/user-attachments/assets/29669162-c5f0-4f61-87f5-34cd163a1053" />
+
 
 ```text
                  dim_customer
