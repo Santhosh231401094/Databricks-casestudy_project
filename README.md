@@ -346,93 +346,22 @@ dimension keys.
 The processing is divided into separate jobs.
 
 ### Customer Job
-
-```text
-Bronze Customers
-       ↓
-Silver Customers
-       ↓
-dim_customer
-```
+<img width="965" height="303" alt="image" src="https://github.com/user-attachments/assets/1a6ad962-975b-4525-a041-2f4c4bf72a02" />
 
 ### Product Job
+<img width="821" height="245" alt="image" src="https://github.com/user-attachments/assets/cbcae570-1168-4194-bc52-b0854f3ad950" />
 
-```text
-Bronze Products
-       ↓
-Silver Products
-       ↓
-dim_product
-```
 
 ### Orders Job
+<img width="615" height="251" alt="image" src="https://github.com/user-attachments/assets/1a320d73-23fc-4d41-a297-49254cd412c6" />
 
-```text
-Auto Loader
-     ↓
-Bronze Orders
-     ↓
-Silver Orders
-```
 
 ### Main Fact Job
+<img width="750" height="461" alt="image" src="https://github.com/user-attachments/assets/4ecd2734-35cc-4c81-9dff-10636f0a451b" />
 
-```text
-Silver Orders
-      +
-Gold Dimensions
-      ↓
-fact_sales
-```
 
 ---
 
-# 📸 Implementation Screenshots
-
-The following screenshots show the actual Databricks implementation.
-
-## Lakeflow Jobs
-
-![Lakeflow Jobs](screenshots/jobs-overview.png)
-
-Shows the configured processing jobs and task dependencies.
-
----
-
-## Customer / Product / Orders Jobs
-
-![Databricks Jobs](screenshots/customer-job.png)
-
-The project separates processing into domain-specific jobs for
-customers, products, and orders.
-
----
-
-## Notebooks
-
-![Databricks Notebooks](screenshots/notebooks.png)
-
-The notebooks contain the Bronze, Silver, and Gold processing logic.
-
----
-
-## Unity Catalog
-
-![Unity Catalog](screenshots/unity-catalog.png)
-
-The project uses Unity Catalog to organize the Bronze, Silver, and Gold
-schemas.
-
----
-
-## Gold Layer
-
-![Gold Tables](screenshots/gold-tables.png)
-
-The Gold layer contains the dimensions and sales fact used for
-analytical processing.
-
----
 
 # 🗂️ Unity Catalog Structure
 
