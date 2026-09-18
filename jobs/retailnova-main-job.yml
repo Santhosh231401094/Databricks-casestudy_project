@@ -1,0 +1,25 @@
+resources:
+  jobs:
+    retailnova_finalrun:
+      name: retailnova_finalrun
+      tasks:
+        - task_key: customers
+          run_job_task:
+            job_id: 934715283541493
+        - task_key: fact_sales
+          depends_on:
+            - task_key: customers
+            - task_key: orders
+            - task_key: products
+          notebook_task:
+            notebook_path: /Workspace/Users/san2921rec@gmail.com/Databricks-casestudy_project/retailnova_casestudy/src/gold/fact_sales
+            source: WORKSPACE
+        - task_key: orders
+          run_job_task:
+            job_id: 555752849803888
+        - task_key: products
+          run_job_task:
+            job_id: 708515330195948
+      queue:
+        enabled: true
+      performance_target: PERFORMANCE_OPTIMIZED
