@@ -1,0 +1,18 @@
+resources:
+  jobs:
+    orders_jobrun1:
+      name: orders_jobrun1
+      tasks:
+        - task_key: orders_autoloader
+          notebook_task:
+            notebook_path: /Workspace/Users/san2921rec@gmail.com/Databricks-casestudy_project/retailnova_casestudy/src/bronze/orders_autoloader
+            source: WORKSPACE
+        - task_key: silver
+          depends_on:
+            - task_key: orders_autoloader
+          notebook_task:
+            notebook_path: /Workspace/Users/san2921rec@gmail.com/Databricks-casestudy_project/retailnova_casestudy/src/silver/orders_silver
+            source: WORKSPACE
+      queue:
+        enabled: true
+      performance_target: PERFORMANCE_OPTIMIZED
