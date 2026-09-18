@@ -39,8 +39,7 @@ The solution implements:
 
 The solution follows the **Bronze → Silver → Gold** Medallion
 Architecture.
-
-<img width="1280" height="715" alt="image" src="https://github.com/user-attachments/assets/0fe220d8-82da-4450-af5e-f734ff29f86a" />
+<img width="1200" height="678" alt="image" src="https://github.com/user-attachments/assets/6c5ace4b-29c5-4239-aee9-7485ba6629e9" />
 
 
 ### Data Flow
