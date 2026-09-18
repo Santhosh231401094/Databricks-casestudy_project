@@ -43,30 +43,8 @@ Architecture.
 
 
 ### Data Flow
+<img width="526" height="290" alt="image" src="https://github.com/user-attachments/assets/cd6984a9-0947-4404-87fa-6552853bccb5" />
 
-```text
-Source Files
-     |
-     v
-+-----------+
-|  Bronze   |
-|   Raw     |
-+-----------+
-     |
-     v
-+-----------+
-|  Silver   |
-|  Cleaned  |
-| Standard  |
-+-----------+
-     |
-     v
-+-----------+
-|   Gold    |
-| Dimensions|
-| + Fact    |
-+-----------+
-```
 
 ---
 
