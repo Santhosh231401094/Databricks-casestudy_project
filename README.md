@@ -437,6 +437,10 @@ retailnova_casestudy/
 │   └── gold/
 │
 ├── jobs/
+    ├── customers-job.yml
+    ├── orders-job.yml
+    ├── products-job.yml
+    └── retailnova-main-job.yml
 
 ```
 
