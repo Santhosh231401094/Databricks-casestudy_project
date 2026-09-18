@@ -1,489 +1,1238 @@
-1. Company Overview
+# RetailNova — Databricks Lakehouse Modernization
 
-RetailNova is a fictional omnichannel retail company operating across India.
+> **Case Study:** RetailNova  
+> **Platform:** Databricks  
+> **Architecture:** Medallion Architecture  
+> **Domain:** Omnichannel Retail  
+> **Processing:** Batch + Incremental File Processing
 
-The company sells products through:
+---
 
-E-commerce
-Mobile applications
-Physical retail stores
+## 1. Company Overview
 
-RetailNova maintains separate operational systems for customer, product, store, and order information.
+**RetailNova** is a fictional omnichannel retail company operating
+across multiple cities in India.
 
-As the business grows, the volume of operational data increases and the analytics team requires a centralized data platform for reporting and analysis.
+The company receives data from different operational systems such as
+customer, product, store, and order management systems.
 
-The company wants to build a Databricks-based analytical platform that can ingest continuously arriving data, process changes incrementally, maintain customer history, and provide a reliable analytical model.
+The existing data is stored as files and needs to be transformed into
+a centralized analytical platform using **Databricks**.
 
-2. Existing Environment
+### Business Objective
 
-RetailNova's operational systems are primarily file-based.
+RetailNova wants to build a reliable data platform that can:
 
-Different systems generate files at different frequencies.
+- Process continuously arriving data
+- Standardize data from multiple sources
+- Improve data quality
+- Preserve historical customer information
+- Provide business-ready analytical data
+- Support incremental processing
+- Reduce repeated full-data processing
 
-The existing environment has the following characteristics:
+---
 
-Customer System
-      │
-      ├── Customer extracts
-      │
-Product System
-      │
-      ├── Product extracts
-      │
-Store System
-      │
-      ├── Store master
-      │
-Order System
-      │
-      └── Transaction files
+# 2. Existing Environment
 
-The files are not directly optimized for analytical workloads.
+RetailNova currently receives data from multiple operational systems.
 
-The company needs to consolidate these sources into a centralized lakehouse.
+| Source System | Data Type | Arrival Pattern | Key Characteristics |
+|---|---|---|---|
+| Customer System | Customer master | Periodic files | Customer attributes can change |
+| Product System | Product master | Periodic files | Prices and attributes can change |
+| Store System | Store master | Relatively static | Approximately 500 stores |
+| Order System | Transactional | Multiple files throughout the day | Largest transactional source |
 
-3. Source Data Environment
-3.1 Customer System
+The source systems are independent and do not provide a standardized
+analytical data model.
 
-The customer system generates periodic customer extracts.
+---
 
-Each customer record contains:
+# 3. Source Data Environment
 
-customer_id
-customer_name
-email
-phone
-city
-state
-customer_tier
-signup_date
-updated_at
+## 3.1 Customer System
 
-Customer information can change over time.
+Customer files contain the following attributes:
 
-For example:
+| Column | Description |
+|---|---|
+| `customer_id` | Business identifier |
+| `customer_name` | Customer name |
+| `email` | Customer email |
+| `phone` | Customer phone |
+| `city` | Customer city |
+| `state` | Customer state |
+| `customer_tier` | Customer classification |
+| `signup_date` | Customer registration date |
+| `updated_at` | Last update timestamp |
 
-Customer: C000123
+### Source Characteristics
 
-Previous:
-City = Chennai
-Tier = Silver
+- Customer records can change over time.
+- The `updated_at` column identifies changed records.
+- Historical customer information must be preserved.
 
-Updated:
-City = Bengaluru
-Tier = Gold
+---
 
-The business needs to preserve these historical changes.
+## 3.2 Product System
 
-3.2 Product System
+Product files contain:
 
-The product system generates product extracts.
+| Column | Description |
+|---|---|
+| `product_id` | Business identifier |
+| `product_name` | Product name |
+| `category` | Product category |
+| `subcategory` | Product subcategory |
+| `brand` | Product brand |
+| `unit_price` | Selling price |
+| `cost_price` | Product cost |
+| `supplier_id` | Supplier identifier |
+| `updated_at` | Last update timestamp |
 
-The data contains:
+### Source Characteristics
 
-product_id
-product_name
-category
-subcategory
-brand
-unit_price
-cost_price
-supplier_id
-updated_at
+Product data may contain:
 
-Product data can contain:
+- Incorrect prices
+- Negative values
+- Inconsistent category names
+- Missing attributes
+- Updated product records
 
-Incorrect prices
-Missing attributes
-Inconsistent category names
-Updated product information
-Duplicate versions
+---
 
-The analytical platform must standardize and validate this data.
+## 3.3 Store System
 
-3.3 Store System
+Store files contain:
 
-RetailNova maintains a store master containing approximately 500 stores.
+| Column | Description |
+|---|---|
+| `store_id` | Store identifier |
+| `store_name` | Store name |
+| `city` | Store city |
+| `state` | Store state |
+| `region` | Business region |
+| `store_type` | Store classification |
+| `opening_date` | Store opening date |
 
-The store data contains:
+### Source Characteristics
 
-store_id
-store_name
-city
-state
-region
-store_type
-opening_date
+- Store data is relatively static.
+- Approximately 500 stores are maintained.
+- Store data does not require continuous incremental processing.
 
-Store information is treated as relatively static reference data for the current implementation.
+---
 
-3.4 Order System
+## 3.4 Order System
 
-The order system is the primary transactional source.
+Orders contain:
 
-Each order contains:
+| Column | Description |
+|---|---|
+| `order_id` | Order identifier |
+| `customer_id` | Customer identifier |
+| `product_id` | Product identifier |
+| `store_id` | Store identifier |
+| `order_timestamp` | Order timestamp |
+| `quantity` | Quantity purchased |
+| `unit_price` | Selling price |
+| `discount_amount` | Discount applied |
+| `status` | Order status |
+| `payment_method` | Payment method |
+| `updated_at` | Last update timestamp |
 
-order_id
-customer_id
-product_id
-store_id
-order_timestamp
-quantity
-unit_price
-discount_amount
-status
-payment_method
-updated_at
+### Source Characteristics
 
-New order files can arrive throughout the day.
+- Orders are the largest transactional source.
+- New files arrive throughout the day.
+- Duplicate records may occur.
+- The source must be processed incrementally.
 
-The platform must therefore support incremental file ingestion rather than treating the entire order dataset as one static file.
+---
 
-4. Business Problems
-Problem 1 — Incremental File Arrivals
+# 4. Business Problems
 
-The order system continuously generates new files.
+RetailNova has several data engineering challenges that must be solved
+before the data can be used for analytics.
 
-Processing the entire order dataset whenever a new file arrives would create unnecessary processing.
+---
 
-Business Requirement
+## Problem 1 — Incremental File Arrivals
 
-New files must be detected and processed incrementally.
+Order files continuously arrive throughout the day.
 
-Problem 2 — No Standardized Data Layers
+A solution that repeatedly processes the entire source data would
+increase processing time and resource usage.
 
-The source files contain raw operational data.
+### Requirement
+
+The solution must process newly arriving order files incrementally
+without requiring manual identification of every new file.
+
+---
+
+## Problem 2 — No Standardized Data Layers
+
+The source systems provide raw operational data.
 
 There is no clear separation between:
 
-Raw Data
-   ↓
-Clean Data
-   ↓
-Business Data
-Business Requirement
+- Raw ingested data
+- Cleaned and standardized data
+- Business-ready analytical data
 
-Implement a Medallion Architecture:
+### Requirement
 
+The solution must implement a **Medallion Architecture**:
+
+```text
 Bronze
    ↓
 Silver
    ↓
 Gold
-Problem 3 — Data Quality Issues
+```
 
-Operational data can contain:
+Each layer should have a clear responsibility.
 
-Null values
-Invalid IDs
-Invalid prices
-Duplicate records
-Inconsistent category values
-Incorrect formatting
+---
+
+## Problem 3 — Data Quality Issues
+
+Source data may contain data quality problems such as:
+
+- Null identifiers
+- Missing attributes
+- Invalid prices
+- Invalid quantities
+- Negative values
+- Inconsistent category names
+- Duplicate records
+
+### Requirement
+
+The solution must identify and handle data quality issues during
+Silver-layer processing.
+
+Invalid records must not silently become business-ready Gold data.
+
+---
+
+## Problem 4 — Duplicate Records
+
+Duplicate order records may occur during file ingestion.
 
 For example:
 
-product_id = P000123
-unit_price = -100
+```text
+order_id
+--------
+ORD1001
+ORD1002
+ORD1002
+ORD1003
+```
 
-or:
+The same transaction may therefore appear more than once.
 
-category = Home appliance
+### Requirement
 
-when the standardized category should be:
+The solution must apply deterministic duplicate handling before
+creating the analytical sales fact.
 
-Home Appliances
-Business Requirement
+---
 
-Identify and process data-quality issues before the data reaches the analytical layer.
-
-Problem 4 — Duplicate Records
-
-Source files can contain duplicate records because of repeated exports or file reprocessing.
-
-For example:
-
-order_id    customer_id    product_id
-O000001     C000123        P000456
-O000001     C000123        P000456
-Business Requirement
-
-Deduplicate records before they are used for analytical processing.
-
-Problem 5 — Customer History Must Be Preserved
+## Problem 5 — Customer History Must Be Preserved
 
 Customer attributes can change over time.
 
-The business does not want the previous customer state to simply disappear.
-
 For example:
 
-C000123
-Chennai
-Silver
+```text
+Customer: C1001
 
-changes to:
+2026-01-01
+Customer Tier = Silver
 
-C000123
-Bengaluru
-Gold
-
-The analytics team needs historical customer versions.
-
-Business Requirement
-
-Implement Slowly Changing Dimension Type 2 (SCD Type 2) for customers.
-
-The dimension must maintain:
-
-customer_key
-customer_id
-customer_name
-city
-state
-customer_tier
-effective_from
-effective_to
-is_current
-5. Incremental Processing Requirements
-
-RetailNova does not want every source to be processed using the same technique.
-
-The ingestion method should match the source characteristics.
-
-Customer and Product
-
-Both contain:
-
-updated_at
-
-Therefore, the solution should maintain a high-watermark/control mechanism.
-
-Last processed timestamp
         ↓
-Read source
+
+2026-06-15
+Customer Tier = Gold
+```
+
+The previous customer state must not simply be overwritten.
+
+### Requirement
+
+The solution must preserve historical customer versions using
+**Slowly Changing Dimension Type 2 (SCD Type 2)**.
+
+---
+
+# 5. Incremental Processing Requirements
+
+Different source systems have different incremental-processing
+requirements.
+
+The solution must select an appropriate incremental strategy based on
+the source characteristics.
+
+---
+
+## 5.1 Customer Incremental Processing
+
+The Customer source contains an `updated_at` column.
+
+The solution must:
+
+1. Store the last successfully processed timestamp.
+2. Read customer records from the source.
+3. Select records newer than the stored timestamp.
+4. Process the new or changed records.
+5. Update the stored watermark after successful processing.
+
+### Required Mechanism
+
+**High-watermark control table**
+
+Example:
+
+```text
+source_name    | last_processed_at
+---------------|--------------------------
+customers      | 2026-09-10 10:30:00
+```
+
+---
+
+## 5.2 Product Incremental Processing
+
+The Product source also contains an `updated_at` column.
+
+The solution must use a high-watermark mechanism to identify new or
+changed product records.
+
+### Required Mechanism
+
+**High-watermark control table**
+
+Example:
+
+```text
+source_name    | last_processed_at
+---------------|--------------------------
+products       | 2026-09-10 11:00:00
+```
+
+---
+
+## 5.3 Order Incremental Processing
+
+Orders arrive as multiple files throughout the day.
+
+The solution must use **Auto Loader** to incrementally discover and
+process newly arriving files.
+
+### Required Mechanism
+
+**Databricks Auto Loader**
+
+```text
+New Order Files
+      ↓
+Auto Loader
+      ↓
+Bronze Orders
+```
+
+---
+
+## 5.4 Incremental Strategy Summary
+
+| Source | Incremental Requirement | Implementation |
+|---|---|---|
+| Customers | Process new/changed records | High-watermark |
+| Products | Process new/changed records | High-watermark |
+| Orders | Process newly arriving files | Auto Loader |
+| Stores | Relatively static | Initial/static load |
+
+> **Important:** The high-watermark mechanism used for Customers and
+> Products is different from Spark Structured Streaming event-time
+> watermarking. It is a batch incremental-processing control mechanism.
+
+---
+
+# 6. Data Processing Requirements
+
+The solution must implement a three-layer **Medallion Architecture**.
+
+```text
+                 SOURCE DATA
+                     |
+                     ↓
+                ┌─────────┐
+                │ BRONZE  │
+                │  Raw    │
+                └────┬────┘
+                     |
+                     ↓
+                ┌─────────┐
+                │ SILVER  │
+                │ Cleaned │
+                │Standard │
+                └────┬────┘
+                     |
+                     ↓
+                ┌─────────┐
+                │  GOLD   │
+                │Business │
+                │ Ready   │
+                └─────────┘
+```
+
+---
+
+## 6.1 Bronze Layer
+
+The Bronze layer must contain the ingested source data with minimal
+transformation.
+
+### Bronze Tables
+
+```text
+retailnova.bronze.customers
+retailnova.bronze.products
+retailnova.bronze.orders
+```
+
+### Bronze Responsibilities
+
+- Ingest source data
+- Preserve source information
+- Support incremental ingestion
+- Provide a reliable source for downstream processing
+
+---
+
+## 6.2 Silver Layer
+
+The Silver layer must contain cleaned and standardized data.
+
+### Silver Responsibilities
+
+- Remove or identify invalid records
+- Trim string values
+- Standardize categories
+- Convert data types
+- Validate numeric values
+- Handle duplicates
+- Prepare data for Gold processing
+
+### Silver Tables
+
+```text
+retailnova.silver.customers
+retailnova.silver.products
+retailnova.silver.orders
+```
+
+---
+
+## 6.3 Gold Layer
+
+The Gold layer must contain business-ready analytical data.
+
+The Gold layer must follow a **dimensional/star-schema design**.
+
+### Gold Dimensions
+
+```text
+retailnova.gold.dim_customer
+retailnova.gold.dim_product
+retailnova.gold.dim_store
+retailnova.gold.dim_date
+```
+
+### Gold Fact
+
+```text
+retailnova.gold.fact_sales
+```
+
+---
+
+# 7. Data Quality Requirements
+
+The Silver layer must perform quality checks before data is used by
+the Gold layer.
+
+## Customer Quality Checks
+
+Examples:
+
+- Validate `customer_id`
+- Trim customer attributes
+- Standardize text values
+- Convert timestamps correctly
+
+---
+
+## Product Quality Checks
+
+Examples:
+
+- Validate `product_id`
+- Validate prices
+- Identify negative prices
+- Standardize category names
+- Handle missing attributes
+- Convert numeric columns to appropriate types
+
+---
+
+## Order Quality Checks
+
+Examples:
+
+- Validate `order_id`
+- Validate `customer_id`
+- Validate `product_id`
+- Validate `store_id`
+- Validate quantity
+- Validate unit price
+- Validate discount
+- Remove duplicate records
+
+---
+
+# 8. Analytical Model Requirement
+
+The Gold layer must follow a **Star Schema**.
+
+The model consists of:
+
+### Dimensions
+
+- `dim_customer`
+- `dim_product`
+- `dim_store`
+- `dim_date`
+
+### Fact
+
+- `fact_sales`
+
+---
+
+## 8.1 Star Schema
+
+```text
+                       ┌─────────────────┐
+                       │  dim_customer   │
+                       │-----------------│
+                       │ customer_key    │
+                       │ customer_id     │
+                       │ customer_name   │
+                       │ customer_tier   │
+                       └────────┬────────┘
+                                │
+                                │
+┌─────────────────┐             │             ┌─────────────────┐
+│   dim_product   │             │             │    dim_store    │
+│-----------------│             │             │-----------------│
+│ product_key     │             │             │ store_key       │
+│ product_id      │             │             │ store_id        │
+│ product_name    │             │             │ store_name      │
+│ category        │             │             │ region          │
+└────────┬────────┘             │             └────────┬────────┘
+         │                      │                      │
+         │                      ▼                      │
+         │             ┌─────────────────┐             │
+         └────────────►│   fact_sales    │◄────────────┘
+                       │-----------------│
+                       │ sales_key       │
+                       │ order_id        │
+                       │ customer_key    │
+                       │ product_key     │
+                       │ store_key       │
+                       │ date_key        │
+                       │ quantity        │
+                       │ unit_price      │
+                       │ discount_amount │
+                       │ sales_amount    │
+                       └────────┬────────┘
+                                │
+                                │
+                       ┌────────▼────────┐
+                       │    dim_date     │
+                       │-----------------│
+                       │ date_key        │
+                       │ full_date       │
+                       │ year            │
+                       │ quarter         │
+                       │ month           │
+                       └─────────────────┘
+```
+
+---
+
+# 9. Dimension Requirements
+
+## 9.1 Customer Dimension
+
+Customer history must be preserved using **SCD Type 2**.
+
+### Table
+
+```text
+retailnova.gold.dim_customer
+```
+
+### Required Columns
+
+| Column | Purpose |
+|---|---|
+| `customer_key` | Surrogate key |
+| `customer_id` | Source/business key |
+| `customer_name` | Customer name |
+| `city` | Customer city |
+| `state` | Customer state |
+| `customer_tier` | Customer tier |
+| `effective_from` | Start of record version |
+| `effective_to` | End of record version |
+| `is_current` | Indicates current version |
+
+### Example
+
+```text
+customer_key | customer_id | customer_tier | effective_from | effective_to | is_current
+-------------|-------------|---------------|----------------|--------------|-----------
+1            | C1001       | Silver        | 2026-01-01     | 2026-06-15   | false
+2            | C1001       | Gold          | 2026-06-15     | NULL         | true
+```
+
+---
+
+## 9.2 Product Dimension
+
+### Table
+
+```text
+retailnova.gold.dim_product
+```
+
+The Product dimension stores the current standardized product
+information.
+
+The solution must:
+
+- Insert new products
+- Update existing products
+- Maintain one current product record per `product_id`
+
+A Delta `MERGE` operation is used to synchronize the Product dimension.
+
+---
+
+## 9.3 Store Dimension
+
+### Table
+
+```text
+retailnova.gold.dim_store
+```
+
+Store data is relatively static.
+
+The solution does not require a recurring incremental Store job.
+
+The Store dimension can be loaded initially and used by downstream
+fact processing.
+
+---
+
+## 9.4 Date Dimension
+
+### Table
+
+```text
+retailnova.gold.dim_date
+```
+
+The Date dimension is a static reference dimension.
+
+It contains calendar attributes such as:
+
+- `date_key`
+- `full_date`
+- `year`
+- `quarter`
+- `month`
+- `month_name`
+- `day`
+- `day_of_week`
+- `day_name`
+
+The Date dimension does not need to be regenerated for every fact load.
+
+---
+
+# 10. Sales Fact Requirement
+
+The project must create a business-ready sales fact.
+
+### Table
+
+```text
+retailnova.gold.fact_sales
+```
+
+### Grain
+
+The intended grain is:
+
+> **One product line per customer order.**
+
+### Required Columns
+
+| Column | Purpose |
+|---|---|
+| `sales_key` | Surrogate fact key |
+| `order_id` | Source order identifier |
+| `customer_key` | Customer dimension key |
+| `product_key` | Product dimension key |
+| `store_key` | Store dimension key |
+| `date_key` | Date dimension key |
+| `order_timestamp` | Order timestamp |
+| `quantity` | Quantity purchased |
+| `unit_price` | Selling price |
+| `discount_amount` | Discount amount |
+| `sales_amount` | Calculated sales amount |
+| `status` | Order status |
+| `payment_method` | Payment method |
+
+---
+
+## Sales Amount Calculation
+
+```text
+sales_amount =
+(quantity × unit_price) - discount_amount
+```
+
+---
+
+# 11. Surrogate Key Requirements
+
+The Gold dimensions must use surrogate keys.
+
+The following dimensions use system-generated identity keys:
+
+```text
+dim_customer → customer_key
+dim_product  → product_key
+dim_store    → store_key
+```
+
+The source-system identifiers remain as business keys:
+
+```text
+customer_id
+product_id
+store_id
+```
+
+### Example
+
+```text
+customer_key | customer_id
+-------------|------------
+1            | C1001
+2            | C1002
+3            | C1003
+```
+
+The surrogate key is generated by the Gold dimension rather than being
+calculated manually from the source data.
+
+---
+
+# 12. Orchestration Requirements
+
+The solution must use separate processing jobs for the major data
+domains.
+
+---
+
+## 12.1 Customer Job
+
+```text
+Bronze Customers
+       ↓
+Silver Customers
+       ↓
+dim_customer
+```
+
+The Customer job handles:
+
+- Incremental Bronze processing
+- Silver transformation
+- Customer SCD Type 2 processing
+
+---
+
+## 12.2 Product Job
+
+```text
+Bronze Products
+       ↓
+Silver Products
+       ↓
+dim_product
+```
+
+The Product job handles:
+
+- Incremental Bronze processing
+- Silver data cleaning
+- Product dimension updates
+
+---
+
+## 12.3 Orders Job
+
+```text
+Order Files
+     ↓
+Auto Loader
+     ↓
+Bronze Orders
+     ↓
+Silver Orders
+```
+
+The Orders job handles:
+
+- Incremental file discovery
+- Bronze ingestion
+- Silver cleaning
+- Duplicate handling
+
+---
+
+## 12.4 Main Fact Job
+
+```text
+                    Silver Orders
+                         |
+        +----------------+----------------+
+        |                |                |
+        ↓                ↓                ↓
+  dim_customer     dim_product       dim_store
+        |                |                |
+        +----------------+----------------+
+                         |
+                     dim_date
+                         |
+                         ↓
+                    fact_sales
+```
+
+The Main Fact job creates the analytical sales fact from the cleaned
+orders and Gold dimensions.
+
+---
+
+# 13. Platform Requirements
+
+The solution must use the Databricks platform and the following
+components:
+
+| Category | Technology |
+|---|---|
+| Data Platform | Databricks |
+| Processing | PySpark |
+| Storage Format | Delta Lake |
+| Governance | Unity Catalog |
+| File Ingestion | Auto Loader |
+| Orchestration | Lakeflow Jobs |
+| Architecture | Medallion Architecture |
+| Data Modeling | Star Schema |
+| Incremental Processing | High-Watermark |
+| Historical Tracking | SCD Type 2 |
+| Source Storage | Unity Catalog Volume |
+
+---
+
+# 14. Unity Catalog Structure
+
+The project uses the following Unity Catalog structure:
+
+```text
+retailnova
+│
+├── bronze
+│   ├── customers
+│   ├── products
+│   ├── orders
+│   └── etl_control
+│
+├── silver
+│   ├── customers
+│   ├── products
+│   └── orders
+│
+└── gold
+    ├── dim_customer
+    ├── dim_product
+    ├── dim_store
+    ├── dim_date
+    └── fact_sales
+```
+
+Source files are stored in a Unity Catalog Volume:
+
+```text
+/Volumes/retailnova/bronze/retailnova_source/
+```
+
+---
+
+# 15. ETL Control Requirements
+
+The Customer and Product incremental pipelines must maintain a
+centralized control table.
+
+### Table
+
+```text
+retailnova.bronze.etl_control
+```
+
+### Structure
+
+| Column | Description |
+|---|---|
+| `source_name` | Source/pipeline identifier |
+| `last_processed_at` | Last successfully processed timestamp |
+
+### Example
+
+```text
+source_name       | last_processed_at
+------------------|--------------------------
+customers         | 2026-09-10 10:30:00
+products          | 2026-09-10 11:00:00
+```
+
+### Processing Logic
+
+```text
+Read Last Watermark
+        ↓
+Read Source Data
         ↓
 Filter updated_at > watermark
         ↓
-Process new/changed records
+Process New/Changed Records
         ↓
-Update watermark
+Write Target
+        ↓
+Update Watermark
+```
 
-A control table is used:
+---
 
-retailnova.bronze.etl_control
-Orders
+# 16. Implementation Constraints
 
-Orders arrive as files.
+The current implementation uses a **Unity Catalog Volume** for source
+files.
 
-The solution should use Auto Loader for incremental file ingestion.
+An active external ADLS landing zone is not part of the current
+environment.
 
+Therefore:
+
+```text
+Source Files
+     ↓
+Unity Catalog Volume
+     ↓
+Databricks
+```
+
+The processing architecture is designed so that the landing layer can
+later be changed to an external cloud storage location if required.
+
+---
+
+# 17. Engineering Decisions
+
+## Why Medallion Architecture?
+
+The Bronze, Silver, and Gold layers separate different processing
+responsibilities.
+
+```text
+Bronze → Ingestion
+Silver → Cleaning + Standardization
+Gold   → Business + Analytics
+```
+
+This makes the pipeline easier to understand, maintain, and
+troubleshoot.
+
+---
+
+## Why Auto Loader for Orders?
+
+Orders arrive as multiple files throughout the day.
+
+Auto Loader is used because the requirement is incremental **file
+discovery and ingestion**.
+
+```text
 New File
    ↓
 Auto Loader
    ↓
-Bronze Orders
-
-This is different from the batch high-watermark approach used for customers and products.
-
-6. Data Processing Requirements
-
-The solution must transform data through multiple layers.
-
 Bronze
+```
 
-Bronze should contain data close to the source representation.
+---
 
-Responsibilities include:
+## Why High-Watermark Processing for Customers and Products?
 
-Source ingestion
-Incremental ingestion
-Preserving source data
-Capturing new files
-Silver
+Customers and Products contain an `updated_at` column.
 
-Silver should contain cleaned and standardized data.
+The ETL control table stores the last successfully processed timestamp.
 
-Responsibilities include:
+The next run only processes records newer than that timestamp.
 
-Null handling
-Data-type conversion
-Trimming
-Standardization
-Data-quality classification
-Deduplication
-Incremental processing
-Gold
-
-Gold should provide business-ready analytical data.
-
-The Gold layer should contain:
-
-Dimensions
-dim_customer
-dim_product
-dim_store
-dim_date
-Fact
-fact_sales
-7. Analytical Model Requirement
-
-The analytics team needs to answer questions such as:
-
-What are sales by customer?
-What are sales by product?
-What are sales by store?
-What are sales by date?
-Which customer attributes were applicable when an order was placed?
-
-The source tables are not designed for these analytical queries.
-
-Requirement
-
-Create a Gold star schema.
-
-                 dim_customer
-                      │
-                      │
-dim_product ──── fact_sales ──── dim_store
-                      │
-                      │
-                   dim_date
-8. Dimension Requirements
-dim_customer
-
-Customer dimension must support SCD Type 2.
-
-customer_key
-customer_id
-customer_name
-city
-state
-customer_tier
-effective_from
-effective_to
-is_current
-dim_product
-
-The product dimension represents the current product state.
-
-product_key
-product_id
-product_name
-category
-subcategory
-brand
-unit_price
-cost_price
-supplier_id
-updated_at
-dim_store
-
-Store is treated as a reference/master dimension in the current implementation.
-
-store_key
-store_id
-store_name
-city
-state
-region
-store_type
-opening_date
-dim_date
-
-The date dimension is generated as a static calendar dimension.
-
-date_key
-full_date
-year
-quarter
-month
-month_name
-day
-day_of_week
-day_name
-
-It does not require continuous ingestion.
-
-9. Sales Fact Requirement
-
-The primary analytical fact is fact_sales.
-
-Grain
-
-One product line within one customer order.
-
-The fact contains:
-
-sales_key
-order_id
-customer_key
-product_key
-store_key
-date_key
-order_timestamp
-quantity
-unit_price
-discount_amount
-sales_amount
-status
-payment_method
-
-The fact must resolve the appropriate surrogate keys from the Gold dimensions.
-
-10. Orchestration Requirements
-
-The solution should separate workloads based on their processing requirements.
-
-Customer Job
-Customer Bronze
+```text
+Control Table
       ↓
-Customer Silver
+Last Processed Timestamp
       ↓
-dim_customer
-Product Job
-Product Bronze
+Filter updated_at
       ↓
-Product Silver
-      ↓
-dim_product
-Orders Job
-Auto Loader
-     ↓
-Orders Bronze
-     ↓
-Orders Silver
-Gold / Fact Processing
-Orders Silver
-      +
-dim_customer
-      +
-dim_product
-      +
-dim_store
-      +
-dim_date
-      ↓
-fact_sales
+New/Changed Records
+```
 
-Store and Date are static/reference dimensions and therefore are not required as recurring job tasks.
+---
 
-11. Platform Requirements
+## Why SCD Type 2 for Customers?
 
-The solution should use:
+Customer attributes can change over time.
 
-Requirement	Solution
-Lakehouse	Databricks
-Data organization	Unity Catalog
-File landing	Unity Catalog Volume
-Raw layer	Bronze Delta tables
-Clean layer	Silver Delta tables
-Analytical layer	Gold Delta tables
-File-based incremental ingestion	Auto Loader
-Batch incremental processing	High-watermark
-Control mechanism	etl_control
-Transformations	PySpark / SQL
-Historical customer changes	SCD Type 2
-Analytical model	Star schema
-Surrogate keys	Delta Identity columns
-Orchestration	Lakeflow Jobs
+SCD Type 2 preserves previous versions instead of overwriting them.
+
+This allows historical customer states to remain available.
+
+---
+
+## Why Identity Surrogate Keys?
+
+Surrogate keys provide Gold dimensions with their own internal keys.
+
+The source-system business keys remain available separately.
+
+```text
+Business Key        Surrogate Key
+
+customer_id  ─────► customer_key
+product_id   ─────► product_key
+store_id     ──────► store_key
+```
+
+The keys are generated by the Gold dimension rather than being manually
+calculated from Spark partitions.
+
+---
+
+## Why Append for Fact Sales?
+
+Sales transactions are treated as append-oriented fact records.
+
+Before inserting records into `fact_sales`, the pipeline checks for
+already-existing fact records.
+
+```text
+Incoming Fact Data
+        ↓
+Compare With Existing Fact Data
+        ↓
+Keep New Records
+        ↓
+Append
+```
+
+This prevents the same incoming records from being inserted repeatedly
+during reruns.
+
+---
+
+## Why Store Is Not in a Recurring Job?
+
+Store data is relatively static.
+
+Therefore, Store does not need to be processed every time the sales
+fact runs.
+
+The fact pipeline reads the existing `dim_store`.
+
+---
+
+## Why Date Is Not in a Recurring Job?
+
+The Date dimension is a static calendar/reference table.
+
+It can be created once and extended when future dates are required.
+
+There is no need to regenerate it during every sales-fact execution.
+
+---
+
+# 18. Final Solution Architecture
+
+```text
+                         SOURCE FILES
+                              |
+              +---------------+---------------+
+              |               |               |
+              ▼               ▼               ▼
+         CUSTOMERS        PRODUCTS          ORDERS
+              |               |               |
+              ▼               ▼               ▼
+           BRONZE          BRONZE         AUTO LOADER
+              |               |               |
+              ▼               ▼               ▼
+           SILVER          SILVER          BRONZE
+              |               |               |
+              ▼               ▼               ▼
+        DIM_CUSTOMER    DIM_PRODUCT        SILVER
+              |               |               |
+              +---------------+---------------+
+                              |
+                   +----------+----------+
+                   |          |          |
+                   ▼          ▼          ▼
+               DIM_STORE  DIM_DATE  SILVER ORDERS
+                   |          |          |
+                   +----------+----------+
+                              |
+                              ▼
+                         FACT_SALES
+```
+
+---
+
+# 19. Implemented Project Scope
+
+The current implemented scope includes:
+
+- [x] Customer ingestion
+- [x] Product ingestion
+- [x] Store ingestion
+- [x] Order ingestion
+- [x] Bronze layer
+- [x] Silver layer
+- [x] Gold layer
+- [x] Auto Loader
+- [x] High-watermark processing
+- [x] ETL control table
+- [x] Customer SCD Type 2
+- [x] Identity surrogate keys
+- [x] Star schema
+- [x] Incremental fact loading
+- [x] Lakeflow Jobs
+- [x] Delta Lake
+- [x] Unity Catalog
+- [x] Unity Catalog Volumes
+- [x] Delta maintenance
+
+---
+
+# 20. Implementation Status
+
+| Component | Status |
+|---|---|
+| Customer Bronze | ✅ Implemented |
+| Customer Silver | ✅ Implemented |
+| Customer SCD Type 2 | ✅ Implemented |
+| Product Bronze | ✅ Implemented |
+| Product Silver | ✅ Implemented |
+| Product Gold | ✅ Implemented |
+| Store Gold | ✅ Implemented |
+| Date Dimension | ✅ Implemented |
+| Orders Auto Loader | ✅ Implemented |
+| Orders Silver | ✅ Implemented |
+| Sales Fact | ✅ Implemented |
+| Lakeflow Jobs | ✅ Implemented |
+| Delta Maintenance | ✅ Implemented |
+
+---
+
+# 21. Project Structure
+
+```text
+retailnova_casestudy/
+│
+├── README.md
+│
+├── case-study/
+│   └── retailnova-case-study.md
+│
+├── architecture/
+│   ├── retailnova-architecture.png
+│   └── retailnova-star-schema.png
+│
+├── src/
+│   ├── setup/
+│   ├── bronze/
+│   ├── silver/
+│   └── gold/
+│
+├── resources/
+│   └── Lakeflow Job definitions
+│
+├── tests/
+│
+├── fixtures/
+│
+├── databricks.yml
+├── pyproject.toml
+├── .gitignore
+├── AGENTS.md
+└── CLAUDE.md
+```
+
+---
+
+# 22. Final Outcome
+
+The RetailNova project demonstrates an end-to-end Databricks Data
+Engineering solution that transforms operational retail files into a
+structured analytical platform.
+
+The implementation demonstrates:
+
+- Incremental file ingestion
+- High-watermark processing
+- Medallion Architecture
+- Data quality processing
+- Customer SCD Type 2
+- Identity surrogate keys
+- Dimensional modeling
+- Star schema
+- Incremental fact loading
+- Delta Lake
+- Unity Catalog
+- Lakeflow Jobs
+- Delta table maintenance
+
+The resulting Gold layer provides a structured foundation for
+downstream analytics and reporting.
