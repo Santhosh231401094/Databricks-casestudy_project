@@ -52,7 +52,8 @@ Architecture.
 
 The Gold layer follows a star-schema design.
 
-<img width="2302" height="2120" alt="star-schema" src="https://github.com/user-attachments/assets/29669162-c5f0-4f61-87f5-34cd163a1053" />
+<img width="1531" height="1621" alt="starchema" src="https://github.com/user-attachments/assets/27c0f145-3272-4e4f-88ed-c1ef6d3535dc" />
+
 
 
 ```text
