@@ -422,39 +422,22 @@ retailnova_casestudy/
 ├── case-study/
 │   └── retailnova-case-study.md
 │
-├── architecture/
-│   ├── retailnova-architecture.png
-│   └── retailnova-star-schema.png
+├── Architecture/
+│   ├── Architecture_diagram.png
+│   └── starschema.png
 │
-├── screenshots/
-│   ├── jobs-overview.png
-│   ├── customer-job.png
-│   ├── product-job.png
-│   ├── orders-job.png
-│   ├── notebooks.png
-│   ├── unity-catalog.png
-│   └── gold-tables.png
 │
 ├── data/
 │   └── README.md
 │
-├── src/
+├── notebooks/
 │   ├── setup/
 │   ├── bronze/
 │   ├── silver/
 │   └── gold/
 │
-├── resources/
-│
-├── tests/
-│
-├── fixtures/
-│
-├── databricks.yml
-├── pyproject.toml
-├── .gitignore
-├── AGENTS.md
-└── CLAUDE.md
+├── jobs/
+
 ```
 
 ---
