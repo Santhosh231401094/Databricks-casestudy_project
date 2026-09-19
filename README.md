@@ -21,12 +21,14 @@ The solution implements:
 - Auto Loader
 - High-watermark processing
 - Data quality checks
+- SCD Type 1
 - SCD Type 2
 - Identity surrogate keys
 - Dimensional modeling
 - Star schema
-- Lakeflow Jobs
 - Delta Lake
+- Delta Lake optimization and maintenance
+- Lakeflow Jobs
 - Unity Catalog
 
 > **Note:** All datasets used in this project are **synthetic datasets**
@@ -225,13 +227,15 @@ retailnova.gold.fact_sales
 | Customer incremental processing | High-watermark |
 | Product incremental processing | High-watermark |
 | Customer history | SCD Type 2 |
+| Product updates | SCD Type 1 using Delta MERGE |
 | Dimension keys | Identity surrogate keys |
 | Analytical model | Star schema |
 | Transaction processing | Incremental fact append |
+| Delta optimization | Optimized Writes, Auto Compaction, Liquid Clustering |
+| Table maintenance | OPTIMIZE and VACUUM |
 | Orchestration | Lakeflow Jobs |
 | Storage format | Delta Lake |
 | Governance | Unity Catalog |
-
 ---
 
 ## Why Auto Loader?
@@ -288,6 +292,21 @@ This preserves customer history.
 
 ---
 
+
+## Why SCD Type 1 for Products?
+
+Product attributes are maintained using **SCD Type 1** processing
+because historical versions of product attributes are not required.
+
+Existing product records are updated with the latest values, while new
+products are inserted.
+
+```text
+Existing Product → UPDATE
+New Product      → INSERT
+```
+---
+
 ## Why Surrogate Keys?
 
 Gold dimensions use system-generated surrogate keys.
@@ -302,6 +321,60 @@ This separates source-system business identifiers from analytical
 dimension keys.
 
 ---
+---
+
+# ⚡ Delta Lake Optimization
+
+Delta Lake optimization techniques are applied to selected Gold-layer
+tables to improve write efficiency, data layout, and table maintenance.
+
+### Optimized Tables
+
+| Table | Optimizations |
+|---|---|
+| `gold.dim_customer` | Optimized Writes, Auto Compaction, Liquid Clustering, OPTIMIZE, VACUUM |
+| `gold.dim_product` | Optimized Writes, Auto Compaction, Liquid Clustering, OPTIMIZE, VACUUM |
+| `gold.fact_sales` | Optimized Writes, Auto Compaction, Liquid Clustering, OPTIMIZE, VACUUM |
+
+### Optimized Writes
+
+Optimized Writes are enabled for Gold tables to reduce the creation of
+small files during write operations.
+
+### Auto Compaction
+
+Auto Compaction is enabled to automatically compact small files created
+during data writes.
+
+### Liquid Clustering
+
+Liquid Clustering is applied to selected Gold tables using columns that
+are commonly used for filtering and joining.
+
+**Clustering columns:**
+
+| Table | Clustering Column(s) |
+|---|---|
+| `gold.dim_customer` | `customer_id` |
+| `gold.dim_product` | `product_id` |
+| `gold.fact_sales` | Selected frequently filtered/joined columns |
+
+Liquid Clustering provides an adaptive data layout without relying on
+traditional static partitioning.
+
+### OPTIMIZE
+
+`OPTIMIZE` is used to reorganize existing Delta files and improve file
+layout for analytical queries.
+
+### VACUUM
+
+`VACUUM` is used for Delta table maintenance by removing obsolete data
+files that are no longer required after the configured retention period.
+
+The complete optimization and maintenance operations are implemented
+in the Delta optimization notebook.
+---
 
 # 🔧 Technology Stack
 
@@ -310,6 +383,8 @@ dimension keys.
 | Data Platform | Databricks |
 | Processing | PySpark |
 | Storage | Delta Lake |
+| Delta Optimization | Optimized Writes, Auto Compaction, Liquid Clustering |
+| Table Maintenance | OPTIMIZE, VACUUM |
 | Governance | Unity Catalog |
 | File Ingestion | Auto Loader |
 | Orchestration | Lakeflow Jobs |
@@ -469,14 +544,19 @@ retailnova_casestudy/
 - [x] High-watermark processing
 - [x] ETL control table
 - [x] Customer SCD Type 2
+- [x] Product SCD Type 1
 - [x] Identity surrogate keys
 - [x] Star schema
 - [x] Incremental fact loading
 - [x] Lakeflow Jobs
 - [x] Delta Lake
+- [x] Optimized Writes
+- [x] Auto Compaction
+- [x] Liquid Clustering
+- [x] OPTIMIZE
+- [x] VACUUM
 - [x] Unity Catalog
 - [x] Unity Catalog Volume
-- [x] Delta maintenance
 
 ---
 
@@ -489,14 +569,14 @@ retailnova_casestudy/
 | Customer SCD Type 2 | ✅ Implemented |
 | Bronze Products | ✅ Implemented |
 | Silver Products | ✅ Implemented |
-| Product Dimension | ✅ Implemented |
+| Product SCD Type 1 | ✅ Implemented |
 | Store Dimension | ✅ Implemented |
 | Date Dimension | ✅ Implemented |
 | Orders Auto Loader | ✅ Implemented |
 | Orders Silver | ✅ Implemented |
 | Sales Fact | ✅ Implemented |
 | Lakeflow Jobs | ✅ Implemented |
-| Delta Maintenance | ✅ Implemented |
+| Delta Optimization & Maintenance | ✅ Implemented |
 
 ---
 
